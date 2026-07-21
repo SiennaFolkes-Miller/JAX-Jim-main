@@ -267,10 +267,10 @@ def main(argv=None, overrides=None):
     duration = 128.0   #added
     start = gps + 2.0 - duration  #changed
     end = start + duration   #changed
-    psd_start = gps - 50    #changed from 1024 to 50 (LC)
-    psd_end = gps + 50    #changed from 1024 to 50 (LC)
+    psd_start = gps - 1024    #changed from 1024 to 50 (LC)
+    psd_end = gps + 1024   #changed from 1024 to 50 (LC)
     fmin = 20.0
-    fmax = 512  #changed from 2048 to 512 (LC)
+    fmax = 2048  #changed from 2048 to 512 (LC)
 
     ifos = [get_H1(), get_L1(), get_V1()]
     for ifo in ifos:
@@ -324,23 +324,30 @@ def main(argv=None, overrides=None):
     #     popsize=10,
     #     n_steps=10,   #changed from 100 to 10 (LC)
     # )
-    #new likelihood (LC)
-    #likelihood = HeterodynedTransientLikelihoodFD(
-    likelihood = TransientLikelihoodFD(
+    #new likelihood (LC) choose between heterodyned or time marginalisation
+    likelihood = HeterodynedTransientLikelihoodFD(
         detectors=ifos,
         waveform=waveform,
         trigger_time=gps,
         f_min=fmin,
         f_max=fmax,
-        #n_bins=100,
-        #prior=prior,
-        #reference_parameters=ref_param,
-        #optimizer_popsize=10,
-        #optimizer_n_steps=10,
-        #likelihood_transforms=likelihood_transforms,
+        n_bins=501,
+        prior=prior,
+        reference_parameters=ref_param,
+        optimizer_popsize=10,
+        optimizer_n_steps=100,
+        likelihood_transforms=likelihood_transforms,
         phase_marginalization=True,
-        time_marginalization=True,
     )
+    # likelihood = TransientLikelihoodFD(
+    #     detectors=ifos,
+    #     waveform=waveform,
+    #     trigger_time=gps,
+    #     f_min=fmin,
+    #     f_max=fmax,
+    #     phase_marginalization=True,
+    #     time_marginalization=True,
+    # )
                                               
 
 
@@ -395,10 +402,10 @@ def main(argv=None, overrides=None):
         return physical_samples
 
     n_dims = len(prior.parameter_names)
-    n_live = 50   #changed from 2000 to 50 (LC)
+    n_live = 2000   #changed from 2000 to 50 (LC)
     n_delete = n_live // 2
     #num_mcmc_steps = args.num_repeats * n_dims    #commented out for now
-    num_mcmc_steps = 5  #change back to the above (LC)
+    num_mcmc_steps = 45  #change back to the above (LC)
 
     labels = {
         "M_c": r"$\mathcal{M}_c\,[M_\odot]$",
@@ -449,7 +456,7 @@ def main(argv=None, overrides=None):
 
     dead = []
     with tqdm(desc="NSS Dead points", unit=" dead points") as pbar:
-        while not state.integrator.logZ_live - state.integrator.logZ < -0.5:   #changed to -1 from -3 for now (LC), also added 'integrator'
+        while not state.integrator.logZ_live - state.integrator.logZ < -1:   #changed to -1 from -3 for now (LC), also added 'integrator'
             (state, rng_key), dead_info = one_step((state, rng_key), None)
             dead.append(dead_info)
             pbar.update(n_delete)
