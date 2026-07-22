@@ -1,19 +1,14 @@
 
-############################
-##copied GW150914 pipeline##
-############################
-
-
-
-
+# # ############################
+# # ##copied GW150914 pipeline##
+# # ############################
 
 
 import argparse
 import json
 import os
-
 import anesthetic
-from anesthetic import NestedSamples, MCMCSamples
+from anesthetic import NestedSamples
 import blackjax
 from blackjax.smc.ess import ess as smc_ess
 from blackjax.smc.resampling import systematic
@@ -22,37 +17,23 @@ jax.config.update("jax_enable_x64", True) #(LC)
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-#from tueplots import bundles #(LC)
 from tqdm import tqdm
-
 from jimgw.core.prior import (
     CombinePrior,
     CosinePrior,
-    PowerLawPrior,
     SinePrior,
     UniformPrior,
-    UniformSpherePrior,
 )
 from jimgw.core.single_event.data import Data
 from jimgw.core.single_event.detector import get_H1, get_L1, get_V1
-from jimgw.core.transforms import BoundToUnbound
-from jimgw.core.single_event.likelihood import TransientLikelihoodFD #(LC)
 from jimgw.core.single_event.likelihood import HeterodynedTransientLikelihoodFD #(LC)
-#from jimgw.core.single_event.likelihood import HeterodynedPhaseMarginalizedLikelihoodFD #(LC)
 from jimgw.core.single_event.transforms import (
-    DistanceToSNRWeightedDistanceTransform,
-    GeocentricArrivalPhaseToDetectorArrivalPhaseTransform,
     GeocentricArrivalTimeToDetectorArrivalTimeTransform,
     MassRatioToSymmetricMassRatioTransform,
     SkyFrameToDetectorFrameSkyPositionTransform,
-    SphereSpinToCartesianSpinTransform,
 )
 from jimgw.core.single_event.transform_utils import eta_to_q   #(LC) different file name
-#from jimgw.core.single_event.waveform import RippleIMRPhenomXAS (LC)
 from jimgw.core.single_event.waveform import RippleIMRPhenomD_NRTidalv2   #new waveform (LC)
-
-#plt.rcParams.update(bundles.tmlr2023()) #(LC)
-
 
 #updated for tidal waveform (LC)
 PARAMETER_NAMES = [
@@ -71,8 +52,7 @@ PARAMETER_NAMES = [
     "dec",
 ]
 
-
-M_c_min, M_c_max = 1.184, 2.168 #changed
+M_c_min, M_c_max = 1.184, 2.168 #changed for GW170817
 q_min, q_max = 0.125, 1.0
 
 def build_prior() -> CombinePrior:
@@ -80,22 +60,12 @@ def build_prior() -> CombinePrior:
 
     prior = []
 
-    # Mass prior
-    # M_c_min, M_c_max = 10.0, 80.0
-    # q_min, q_max = 0.125, 1.0
+    #mass prior
     Mc_prior = UniformPrior(M_c_min, M_c_max, parameter_names=["M_c"])
     q_prior = UniformPrior(q_min, q_max, parameter_names=["q"])
     prior.extend([Mc_prior, q_prior])
 
-    # # Spin prior (precessing)
-    # prior.extend(
-    #     [
-    #         UniformSpherePrior(parameter_names=["s1"], max_mag=0.05),
-    #         UniformSpherePrior(parameter_names=["s2"], max_mag=0.05),
-    #         SinePrior(parameter_names=["iota"]),
-    #     ]
-    # )
-    #new spin prior (LC)
+    #new spin prior with tidal parameters (LC)
     prior.extend(
         [
             UniformPrior(-0.05, 0.05, parameter_names=["s1_z"]),
@@ -105,13 +75,11 @@ def build_prior() -> CombinePrior:
             SinePrior(parameter_names=['iota']),
         ]
     )
-
     # Extrinsic prior
     prior.extend(
         [
-            #PowerLawPrior(1.0, 100.0, 2.0, parameter_names=["d_L"]),  #changed
-            UniformPrior(10.0, 75.0, parameter_names=["d_L"]),  #changed            
-            UniformPrior(-0.1, 0.1, parameter_names=["t_c"]),   #changed
+            UniformPrior(10.0, 75.0, parameter_names=["d_L"]),  #was power law before        
+            UniformPrior(-0.1, 0.1, parameter_names=["t_c"]),  
             UniformPrior(0.0, 2 * jnp.pi, parameter_names=["phase_c"]),
             UniformPrior(0.0, jnp.pi, parameter_names=["psi"]),
             UniformPrior(0.0, 2 * jnp.pi, parameter_names=["ra"]),
@@ -122,85 +90,6 @@ def build_prior() -> CombinePrior:
     return CombinePrior(prior)
 
 
-#Old (LC)
-# def build_transforms(gps_time, ifos):
-#     sample_transforms = [
-#         DistanceToSNRWeightedDistanceTransform(gps_time=gps_time, ifos=ifos),
-#         GeocentricArrivalPhaseToDetectorArrivalPhaseTransform(gps_time=gps_time, ifo=ifos[0]),
-#         GeocentricArrivalTimeToDetectorArrivalTimeTransform(gps_time=gps_time, ifo=ifos[0]),
-#         SkyFrameToDetectorFrameSkyPositionTransform(gps_time=gps_time, ifos=ifos),
-#         BoundToUnbound(
-#             name_mapping=(["M_c"], ["M_c_unbounded"]),
-#             original_lower_bound=M_c_min,
-#             original_upper_bound=M_c_max,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["q"], ["q_unbounded"]),
-#             original_lower_bound=q_min,
-#             original_upper_bound=q_max,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["s1_phi"], ["s1_phi_unbounded"]),
-#             original_lower_bound=0.0,
-#             original_upper_bound=2 * jnp.pi,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["s2_phi"], ["s2_phi_unbounded"]),
-#             original_lower_bound=0.0,
-#             original_upper_bound=2 * jnp.pi,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["iota"], ["iota_unbounded"]),
-#             original_lower_bound=0.0,
-#             original_upper_bound=jnp.pi,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["s1_theta"], ["s1_theta_unbounded"]),
-#             original_lower_bound=0.0,
-#             original_upper_bound=jnp.pi,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["s2_theta"], ["s2_theta_unbounded"]),
-#             original_lower_bound=0.0,
-#             original_upper_bound=jnp.pi,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["s1_mag"], ["s1_mag_unbounded"]),
-#             original_lower_bound=0.0,
-#             original_upper_bound=0.05,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["s2_mag"], ["s2_mag_unbounded"]),
-#             original_lower_bound=0.0,
-#             original_upper_bound=0.05,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["phase_det"], ["phase_det_unbounded"]),
-#             original_lower_bound=0.0,
-#             original_upper_bound=2 * jnp.pi,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["psi"], ["psi_unbounded"]),
-#             original_lower_bound=0.0,
-#             original_upper_bound=jnp.pi,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["zenith"], ["zenith_unbounded"]),
-#             original_lower_bound=0.0,
-#             original_upper_bound=jnp.pi,
-#         ),
-#         BoundToUnbound(
-#             name_mapping=(["azimuth"], ["azimuth_unbounded"]),
-#             original_lower_bound=0.0,
-#             original_upper_bound=2 * jnp.pi,
-#         ),
-#     ]
-#     likelihood_transforms = [
-#         MassRatioToSymmetricMassRatioTransform,
-#         SphereSpinToCartesianSpinTransform("s1"),
-#         SphereSpinToCartesianSpinTransform("s2"),
-#     ]
-#     return sample_transforms, likelihood_transforms
 
 #new transforms (LC)
 def build_transforms(gps_time, ifos):
@@ -211,7 +100,6 @@ def build_transforms(gps_time, ifos):
 
 def prepare_ref_params(ref_param: dict, likelihood_transforms):
     """Forward-map reference parameters through the likelihood transforms."""
-
     for transform in reversed(likelihood_transforms):
         ref_param = transform.forward(ref_param)
     return ref_param
@@ -219,7 +107,7 @@ def prepare_ref_params(ref_param: dict, likelihood_transforms):
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Nested-sampling GW170817 analysis with BlackJAX.",  #changed
+        description="Nested-sampling GW170817 analysis with BlackJAX.", 
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -232,7 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--N",
         type=str,
         default="",
-        help="Identifier appended to the GW170817 results directory.", #changed
+        help="Identifier appended to the GW170817 results directory.",
     )
     parser.add_argument(
         "--num-repeats",
@@ -243,10 +131,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     return parser
 
-
 def parse_args(argv=None):
     return build_parser().parse_args(argv)
-
 
 
 def main(argv=None, overrides=None):
@@ -257,20 +143,22 @@ def main(argv=None, overrides=None):
 
     base_outdir = args.outdir if args.outdir.endswith("/") else f"{args.outdir}/"
     tag = f"_{args.N}" if args.N else ""
-    outdir = f"{base_outdir}GW170817{tag}/"    #changed name
+    outdir = f"{base_outdir}GW170817{tag}/"   
     os.makedirs(outdir, exist_ok=True)
 
     print(f"Saving output to {outdir}")
     print("Starting data fetch and PSD estimation")
     print("getting data and waveform")
-    gps = 1187008882.43  #changed
-    duration = 128.0   #added
-    start = gps + 2.0 - duration  #changed
-    end = start + duration   #changed
-    psd_start = gps - 1024    #changed from 1024 to 50 (LC)
-    psd_end = gps + 1024   #changed from 1024 to 50 (LC)
+
+    #specific for GW170817
+    gps = 1187008882.43  
+    duration = 128.0   
+    start = gps + 2.0 - duration  
+    end = start + duration   
+    psd_start = gps - 1024    #goal is 4096
+    psd_end = gps + 1024    #goal is 4096
     fmin = 20.0
-    fmax = 2048  #changed from 2048 to 512 (LC)
+    fmax = 2048  #goal is 2048
 
     ifos = [get_H1(), get_L1(), get_V1()]
     for ifo in ifos:
@@ -281,8 +169,9 @@ def main(argv=None, overrides=None):
         psd_fftlength = data.duration * data.sampling_frequency
         ifo.set_psd(psd_data.to_psd(nperseg=psd_fftlength))
 
-    #waveform = RippleIMRPhenomPv2(f_ref=fmin)  #old waveform (LC)
+
     waveform=RippleIMRPhenomD_NRTidalv2(f_ref=fmin)   #new waveform (LC)
+
     print("building prior and transforms")
     prior = build_prior()
     sample_transforms, likelihood_transforms = build_transforms(gps, ifos)
@@ -290,7 +179,7 @@ def main(argv=None, overrides=None):
     #Updated (LC)
     ref_param = {
         'M_c': 1.1975896,
-        'eta': 0.2461001,  #corresponds to q=0.9
+        'q': float(eta_to_q(0.2461001)),  
         's1_z': -0.01890608,
         's2_z': 0.04888488,
         'lambda_1': 791.04366468,
@@ -303,53 +192,27 @@ def main(argv=None, overrides=None):
         'ra': 3.39736826,
         'dec': -0.34000186
     }
-    
-    if "q" not in ref_param and "eta" in ref_param:
-        ref_param["q"] = float(eta_to_q(ref_param["eta"]))
-        #ref_param.pop("eta")   #import to remove (LC) as new waveform wants eta, but final samples should still be in q
-    #ref_param = prepare_ref_params(ref_param, likelihood_transforms)
+
+    #removed previous work converting between q and eta as this is handled in likelihood_transforms
+    ref_param = prepare_ref_params(ref_param, likelihood_transforms)
+
     print("building likelihood")
-    #old likelihood (LC)
-    # likelihood = HeterodynedPhaseMarginalizedLikelihoodFD(
-    #     ifos,
-    #     waveform=waveform,
-    #     trigger_time=gps,
-    #     f_min=fmin,
-    #     f_max=fmax,
-    #     n_bins=100,   #will need to be increased (501, 1000?) (LC)
-    #     prior=prior,
-    #     sample_transforms=sample_transforms,
-    #     likelihood_transforms=likelihood_transforms,
-    #     ref_params=ref_param,
-    #     popsize=10,
-    #     n_steps=10,   #changed from 100 to 10 (LC)
-    # )
-    #new likelihood (LC) choose between heterodyned or time marginalisation
+
+    #new likelihood (LC)
     likelihood = HeterodynedTransientLikelihoodFD(
         detectors=ifos,
         waveform=waveform,
         trigger_time=gps,
         f_min=fmin,
         f_max=fmax,
-        n_bins=501,
+        n_bins=501,   #goal is 501
         prior=prior,
         reference_parameters=ref_param,
         optimizer_popsize=10,
-        optimizer_n_steps=100,
+        optimizer_n_steps=100,   #goal is 100
         likelihood_transforms=likelihood_transforms,
         phase_marginalization=True,
     )
-    # likelihood = TransientLikelihoodFD(
-    #     detectors=ifos,
-    #     waveform=waveform,
-    #     trigger_time=gps,
-    #     f_min=fmin,
-    #     f_max=fmax,
-    #     phase_marginalization=True,
-    #     time_marginalization=True,
-    # )
-                                              
-
 
     arg_snapshot = vars(args).copy()
     run_config = {
@@ -360,11 +223,12 @@ def main(argv=None, overrides=None):
             "fmax": fmax,
         },
     }
+
     with open(os.path.join(outdir, "run_configuration.json"), "w") as fh:
         json.dump(run_config, fh, indent=2)
 
-    print("initialising transforms")
 
+    print("initialising transforms")
     def loglikelihood(x):
         for transform in reversed(sample_transforms):
             x, _ = transform.inverse(x)
@@ -390,6 +254,7 @@ def main(argv=None, overrides=None):
             x, _ = t.inverse(x)
         return x
 
+
     def process_samples_to_physical(unbounded_samples):
         """Convert unbounded samples to physical parameter space."""
         sample_dict = {key: np.array(value) for key, value in unbounded_samples.items()}
@@ -401,17 +266,20 @@ def main(argv=None, overrides=None):
         physical_samples.setdefault("q", sample_dict.get("q"))
         return physical_samples
 
+
     n_dims = len(prior.parameter_names)
-    n_live = 2000   #changed from 2000 to 50 (LC)
+    n_live = 1000   #goal is 5000
     n_delete = n_live // 2
-    #num_mcmc_steps = args.num_repeats * n_dims    #commented out for now
-    num_mcmc_steps = 45  #change back to the above (LC)
+    #num_mcmc_steps = args.num_repeats * n_dims    #goal is 8 x ndims
+    num_mcmc_steps = 15  #reduced for quick runs
 
     labels = {
         "M_c": r"$\mathcal{M}_c\,[M_\odot]$",
         "q": r"$q$",
         "s1_z": r"$s_{1,z}$",
         "s2_z": r"$s_{2,z}$",
+        "lambda_1": r'$\Lambda_1$',
+        "lambda_2": r'$\Lambda_2$',
         "iota": r"$\iota$",
         "d_L": r"$d_L\,[\mathrm{Mpc}]$",
         "t_c": r"$t_c\,[\mathrm{s}]$",
@@ -429,7 +297,9 @@ def main(argv=None, overrides=None):
     first_key = next(iter(initial_particles.keys()))
     print(f"using device {initial_particles[first_key].device}")
 
+
     # ========== Run NSS ==========
+
     print("\n" + "=" * 50)
     print("Running Nested Sampling (NSS)")
     print("=" * 50)
@@ -449,14 +319,15 @@ def main(argv=None, overrides=None):
         return (state, k), dead_point
 
     #got rid of duplicate initialisation
+
     print("initialising sampler")
     state = nested_sampler.init(initial_particles)
     (state_dummy, rng_key), _ = one_step((state, rng_key), None)
-    jax.block_until_ready(state_dummy.integrator.logZ)
+    jax.block_until_ready(state_dummy.integrator.logZ)  #(LC) added .integrator
 
     dead = []
     with tqdm(desc="NSS Dead points", unit=" dead points") as pbar:
-        while not state.integrator.logZ_live - state.integrator.logZ < -1:   #changed to -1 from -3 for now (LC), also added 'integrator'
+        while not state.integrator.logZ_live - state.integrator.logZ < -1:   #goal is -3, (LC) added 'integrator'
             (state, rng_key), dead_info = one_step((state, rng_key), None)
             dead.append(dead_info)
             pbar.update(n_delete)
@@ -471,13 +342,16 @@ def main(argv=None, overrides=None):
         labels=labels,
     )
 
+
     nss_ess = float(blackjax.ns.utils.ess(jax.random.PRNGKey(0), samples))
     print(f"NSS log(Z) = {float(nss_dataframe.logZ()):.2f}")
     print(f"NSS ESS = {nss_ess:.1f}")
 
     nss_dataframe.to_csv(
-        "./outdir/GW170817/nss_samples.csv"   #changed
+        "./outdir/GW170817/nss_samples.csv"  
     )
+
+
 
 if __name__ == "__main__":
     main()

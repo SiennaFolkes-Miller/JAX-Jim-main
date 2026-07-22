@@ -20,14 +20,17 @@ from scipy.stats import gaussian_kde
 from pandas import read_csv
 from anesthetic import NestedSamples
 
-df = read_csv(
-    "outdir/GW170817/nss_samples.csv",   #change between events
-    skiprows=[1, 2],      #skip labels and weights rows
-    index_col=0
-)
+# df = read_csv(
+#     "outdir/GW170817/nss_samples.csv",   #change between events
+#     skiprows=[1, 2],      #skip labels and weights rows
+#     index_col=0
+# )
 
-nss_samples = NestedSamples(df)
+# nss_samples = NestedSamples(df)
 
+from anesthetic import read_chains
+
+nss_samples = read_chains("outdir/GW170817/nss_samples.csv")
 
 ##CORNER PLOT
 plot_params = [
@@ -35,6 +38,8 @@ plot_params = [
     "q",
     "s1_z",
     "s2_z",
+    "lambda_1",
+    "lambda_2",
     "iota",
     "d_L",
     "t_c",
@@ -58,6 +63,7 @@ labels = {
 
 
 #making plot
+
 fig, ax = anesthetic.make_2d_axes(plot_params, upper=False, figsize=(11, 9))
 nss_samples.plot_2d(
     ax,
@@ -159,7 +165,7 @@ axes[0].set_xlabel(r"$d_L$ (Mpc)", fontsize=14)
 axes[0].set_ylabel("Posterior probability density", fontsize=16)
 
 
-axes[1].hist(H0, bins=500, weights=weights, density=True, alpha=0.6)
+axes[1].hist(H0, bins=100, weights=weights, density=True, alpha=0.6)
 axes[1].axvline(q50_H0, color='black', lw=2, label='Median')
 axes[1].axvline(q16_H0, color='gray', ls='--', lw=1, label='16% quartile')
 axes[1].axvline(q84_H0, color='gray', ls='--', lw=1, label='84% quartile')
