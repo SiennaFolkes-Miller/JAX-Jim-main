@@ -155,10 +155,10 @@ def main(argv=None, overrides=None):
     duration = 128.0   
     start = gps + 2.0 - duration  
     end = start + duration   
-    psd_start = gps - 1024    #goal is 4096
-    psd_end = gps + 1024    #goal is 4096
+    psd_start = gps - 100    #goal is 4096
+    psd_end = gps + 100    #goal is 4096
     fmin = 20.0
-    fmax = 2048  #goal is 2048
+    fmax = 512  #goal is 2048
 
     ifos = [get_H1(), get_L1(), get_V1()]
     for ifo in ifos:
@@ -205,11 +205,11 @@ def main(argv=None, overrides=None):
         trigger_time=gps,
         f_min=fmin,
         f_max=fmax,
-        n_bins=501,   #goal is 501
+        n_bins=256,   #goal is 501
         prior=prior,
         reference_parameters=ref_param,
         optimizer_popsize=10,
-        optimizer_n_steps=100,   #goal is 100
+        optimizer_n_steps=50,   #goal is 100
         likelihood_transforms=likelihood_transforms,
         phase_marginalization=True,
     )
@@ -271,7 +271,7 @@ def main(argv=None, overrides=None):
     n_live = 1000   #goal is 5000
     n_delete = n_live // 2
     #num_mcmc_steps = args.num_repeats * n_dims    #goal is 8 x ndims
-    num_mcmc_steps = 15  #reduced for quick runs
+    num_mcmc_steps = 10  #reduced for quick runs
 
     labels = {
         "M_c": r"$\mathcal{M}_c\,[M_\odot]$",
