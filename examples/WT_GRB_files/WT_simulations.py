@@ -648,7 +648,7 @@ for i in range(iterations):
         f_max=fmax,
         n_bins=256,   #goal is 501
         prior=prior_U,
-        reference_parameters=ref_param,
+        #reference_parameters=ref_param,
         optimizer_popsize=10,
         optimizer_n_steps=50,   #goal is 100
         likelihood_transforms=likelihood_transforms,
