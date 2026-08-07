@@ -153,24 +153,26 @@ def main(argv=None, overrides=None):
     #specific for GW170817
     gps = 1187008882.43  
     duration = 128.0   
+    psd_duration = 2000
+    psd_pad = 16
     start = gps + 2.0 - duration  
     end = start + duration   
-    psd_start = gps - 100    #goal is 4096
-    psd_end = gps + 100    #goal is 4096
+    psd_start = start - psd_pad - psd_duration
+    psd_end = start - psd_pad
     fmin = 20.0
-    fmax = 512  #goal is 2048
+    fmax = 1024  #goal is 2048
 
     ifos = [get_H1(), get_L1(), get_V1()]
     for ifo in ifos:
-        data = Data.from_gwosc(ifo.name, start, end)
+        data = Data.from_gwosc(ifo.name, start, end, version=2)
         ifo.set_data(data)
 
-        psd_data = Data.from_gwosc(ifo.name, psd_start, psd_end)
+        psd_data = Data.from_gwosc(ifo.name, psd_start, psd_end, version=2)
         psd_fftlength = data.duration * data.sampling_frequency
         ifo.set_psd(psd_data.to_psd(nperseg=psd_fftlength))
 
 
-    waveform=RippleIMRPhenomD_NRTidalv2(f_ref=fmin)   #new waveform (LC)
+    waveform=RippleIMRPhenomD_NRTidalv2(f_ref=fmin, use_lambda_tildes=False)   #new waveform (LC)
 
     print("building prior and transforms")
     prior = build_prior()
@@ -208,8 +210,8 @@ def main(argv=None, overrides=None):
         n_bins=256,   #goal is 501
         prior=prior,
         reference_parameters=ref_param,
-        optimizer_popsize=10,
-        optimizer_n_steps=50,   #goal is 100
+        #optimizer_popsize=10,
+        #optimizer_n_steps=50,   #goal is 100
         likelihood_transforms=likelihood_transforms,
         phase_marginalization=True,
     )
@@ -268,7 +270,7 @@ def main(argv=None, overrides=None):
 
 
     n_dims = len(prior.parameter_names)
-    n_live = 1000   #goal is 5000
+    n_live = 500   #goal is 5000
     n_delete = n_live // 2
     #num_mcmc_steps = args.num_repeats * n_dims    #goal is 8 x ndims
     num_mcmc_steps = 10  #reduced for quick runs

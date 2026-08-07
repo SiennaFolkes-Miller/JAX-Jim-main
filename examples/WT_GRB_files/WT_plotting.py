@@ -11,11 +11,11 @@ from ast import literal_eval
 import os
 
 
-output_dir = "examples/WT_GRB_files"
+output_dir = "outdir/WT"
 
-analysis = "BNS"
+analysis = "BBH"
 validation = False         
-toggle = 2                 
+toggle = 0                 
 plot_truth = True    
 
 if validation:
@@ -34,15 +34,15 @@ if validation:
 else:
     samplesU_path = os.path.join(
         output_dir,
-        f"samples_BNS_unconditioned_{toggle}_main.csv"
+        f"samples_BBH_unconditioned_{toggle}_main.csv"
     )
     samplesC_path = os.path.join(
         output_dir,
-        f"samples_BNS_conditioned_{toggle}_main.csv"
+        f"samples_BBH_conditioned_{toggle}_main.csv"
     )
     metadata_path = os.path.join(
         output_dir,
-        f"BNS_{toggle}_data_main.csv"
+        f"BBH_{toggle}_data_main.csv"
     )
 
 loaded_samplesU = read_chains(samplesU_path)
@@ -72,10 +72,14 @@ plt.rcParams.update({
     'font.size': 15,
 })
 
-params = ["M_c", "q", "s1_z", "s2_z", "iota", "d_L", "t_c", "phase_c", "psi", "ra", "dec", "lambda_1", "lambda_2"]
+# params = ["M_c", "q", "s1_z", "s2_z", "iota", "d_L", "t_c", "phase_c", "psi", "ra", "dec", "lambda_1", "lambda_2"]
+# labels = [
+#     r"\mathcal{M}_{\mathrm{c}}", r"\mathrm{q}", r"\mathrm{s}_{1z}", r"\mathrm{s}_{2z}", r"\iota",
+#     r"d_{L}", r"t_{c}", r"\phi_{c}", r"\psi", r"\alpha", r"\delta", r"\Lambda_1", r"\Lambda_2"]
+params = ["M_c", "q", "s1_z", "s2_z", "iota", "d_L", "t_c", "phase_c", "psi", "ra", "dec"]
 labels = [
     r"\mathcal{M}_{\mathrm{c}}", r"\mathrm{q}", r"\mathrm{s}_{1z}", r"\mathrm{s}_{2z}", r"\iota",
-    r"d_{L}", r"t_{c}", r"\phi_{c}", r"\psi", r"\alpha", r"\delta", r"\Lambda_1", r"\Lambda_2"]
+    r"d_{L}", r"t_{c}", r"\phi_{c}", r"\psi", r"\alpha", r"\delta"]
 
 fig, axes = make_2d_axes(params, lower=True, diagonal=True, upper=True, figsize=(19.0, 13.0))
 
@@ -152,7 +156,7 @@ fig.suptitle("GW170817: Unconditioned vs Conditioned Posteriors", fontsize=21.5,
 fig.tight_layout()
 plt.subplots_adjust(top=0.93)
 plt.savefig(
-    os.path.join(output_dir, "BNS_Simulations.jpg"),
+    os.path.join(output_dir, "BBH_Simulations.jpg"),
     dpi=600,
     bbox_inches="tight",
 )

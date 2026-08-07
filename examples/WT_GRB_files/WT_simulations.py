@@ -53,15 +53,15 @@ os.environ['XLA_PYTHON_CLIENT_PREALLOCATE']= 'false'
 # Change these parameters to control the analysis.
 
 # Main Settings:
-analysis = "BNS"
-validation = True
-include_virgo = True # Set true for BNS!
-n_live = 3000
+analysis = "BBH"
+validation = False
+include_virgo = False # Set true for BNS!
+n_live = 1000
 
 # Global Settings:
 fmin, fmax = 20.0, 1024.0
 f_ref = 20.0
-iteration_number = 3
+iteration_number = 1 #CHANGE BACK
 if validation == True:
     iterations = 1
 else:
@@ -73,9 +73,10 @@ sampling_frequency = 4096.0 # ONLY USED IN WAVEFORM GENERATION
 
 # --- Nested Sampling Configuration ---
 n_delete = n_live//2
-threshold = 3
-num_mcmc_steps_ratio = 3 # Number of MCMC steps relative to n_dims
-psd_padding = 1024 # Padding for PSD estimation to avoid trigger wrap-around
+threshold = 2
+num_mcmc_steps_ratio = 2 # Number of MCMC steps relative to n_dims
+psd_padding = 16 # Padding for PSD estimation to avoid trigger wrap-around
+psd_duration = 2000
 
 # --- Prior Settings ---
 lambda_min, lambda_max = 0.0, 1000.0
@@ -133,10 +134,10 @@ if analysis == "BNS":
     post_trigger_duration = 4.0
 
     # Priors
-    M_c_min, M_c_max = 1.1, 2.2
+    M_c_min, M_c_max = 1.1, 2.2   #CHANGE BACK
     q_min, q_max = 0.125, 1.0
     s_z_min, s_z_max = -0.05, 0.05
-    d_L_min, d_L_max = 10.0, 800.0
+    d_L_min, d_L_max = 10.0, 75.0   #CHANGE BACK
     t_c_min, t_c_max = -0.05, 0.05
     phase_c_min, phase_c_max = 0.0, 2*jnp.pi
     psi_min, psi_max = 0.0, jnp.pi
@@ -165,8 +166,8 @@ if analysis == "BNS":
 # =========================================================
 n_dims = len(columns)
 num_mcmc_steps = n_dims * num_mcmc_steps_ratio
-gps_start = gps - fft_duration + post_trigger_duration
-gps_end = gps + post_trigger_duration
+gps_start = gps + post_trigger_duration - fft_duration  
+gps_end = gps_start + fft_duration   
 
 
 # %%
@@ -216,8 +217,8 @@ store_global_settings = {
 # %%
 # Block 2a: PSD Calculation
 
-start_psd = int(gps) - fft_duration - 2 * psd_padding
-end_psd   = int(gps) - fft_duration - psd_padding
+start_psd = start - psd_padding - psd_duration
+end_psd = start - psd_padding
 
 #SFM simplified, no median filtering, had to change some variable names
 print("Fetching PSD data...")
@@ -285,7 +286,7 @@ def build_conditional_prior(ra_mean, ra_std, dec_mean, dec_std):
             UniformPrior(s_z_min,s_z_max, parameter_names=["s1_z"]),
             UniformPrior(s_z_min,s_z_max, parameter_names=["s2_z"]),
             SinePrior(parameter_names=["iota"]),
-            UniformPrior(d_L_min, d_L_max, parameter_names=["d_L"]),
+            UniformPrior(d_L_min, d_L_max, parameter_names=["d_L"]),  
             UniformPrior(t_c_min, t_c_max, parameter_names=["t_c"]),
             UniformPrior(phase_c_min, phase_c_max, parameter_names=["phase_c"]),
             UniformPrior(psi_min, psi_max, parameter_names=["psi"]),
@@ -348,6 +349,7 @@ elif analysis == "BNS":
 if validation == False:
     truth_values = []
     injection = []
+    ref_params = []
     SNR = []
     rng_key = jax.random.PRNGKey(mock_data_seed)
 
@@ -388,6 +390,40 @@ if validation == False:
         truth_values.append(true_value_iteration)
         injection.append(injection_iteration)
 
+        if analysis == "BBH":
+            ref_param_iteration = {
+                "M_c": true_params["M_c"],
+                "q": true_params["q"],
+                "s1_z": true_params["s1_z"],
+                "s2_z": true_params["s2_z"],
+                "d_L": true_params["d_L"],
+                "t_c": true_params["t_c"],
+                "phase_c": true_params["phase_c"],
+                "iota": true_params["iota"],
+                "psi": true_params["psi"],
+                "ra": true_params["ra"],
+                "dec": true_params["dec"],
+            }
+
+        elif analysis == "BNS":
+            ref_param_iteration = {
+                "M_c": true_params["M_c"],
+                "q": true_params["q"],
+                "s1_z": true_params["s1_z"],
+                "s2_z": true_params["s2_z"],
+                "lambda_1": true_params["lambda_1"],
+                "lambda_2": true_params["lambda_2"],
+                "d_L": true_params["d_L"],
+                "t_c": true_params["t_c"],
+                "phase_c": true_params["phase_c"],
+                "iota": true_params["iota"],
+                "psi": true_params["psi"],
+                "ra": true_params["ra"],
+                "dec": true_params["dec"],
+            }
+
+        ref_params.append(ref_param_iteration)
+
     df_true_values = pd.DataFrame(truth_values)
     injection_parameter_df = pd.DataFrame(injection)
     truth_path = os.path.join(output_dir, "truth_metadata_main.csv")
@@ -399,7 +435,7 @@ if validation == False:
     if analysis == "BBH":
         waveform = RippleIMRPhenomD(f_ref=f_ref)
     else:
-        waveform = RippleIMRPhenomD_NRTidalv2(f_ref=f_ref)
+        waveform = RippleIMRPhenomD_NRTidalv2(f_ref=f_ref, use_lambda_tildes=False)
 
     for i in range(len(injection_parameter_df)):
         print(f"\nGenerating and injecting waveform {i+1}/{iterations}")
@@ -540,44 +576,6 @@ def prepare_ref_params(ref_param: dict, likelihood_transforms):
 
 sample_transforms, likelihood_transforms = build_transforms(gps, ifos)
 
-#SFM needs editing
-if analysis == "BBH":
-    ref_param = {
-        "M_c": 3.10497857e01,
-        "q": float(eta_to_q(0.15874815)),
-        "s1_z": 0.5,
-        "s2_z": 0.5,
-        "d_L": 5.47223231e02,
-        "t_c": 1.29378808e-02,
-        "phase_c": 3.30994042e00,
-        "iota": 1.17146435,
-        "psi": 3.41074151e-02,
-        "ra": 2.55345319e00,
-        "dec": -1.26006121,
-    }
-else: #BNS
-    ref_param = {
-        'M_c': 1.1975896,
-        'q': float(eta_to_q(0.2461001)),  
-        's1_z': -0.01890608,
-        's2_z': 0.04888488,
-        'lambda_1': 791.04366468,
-        'lambda_2': 891.04366468,
-        'd_L': 40.06331818,
-        't_c': 0.00193536,
-        'phase_c': 5.88649652,
-        'iota': 1.93095421,
-        'psi': 1.59687217,
-        'ra': 3.39736826,
-        'dec': -0.34000186
-    }
-
-
-ref_param = prepare_ref_params(ref_param, likelihood_transforms)
-#end of SFM additions
-
-
-
 
 
 # Define global variables needed in functions
@@ -629,16 +627,55 @@ def process_samples_to_physical(unbounded_samples):
 #end of new SFM additions
 
 
-
-
-
-
 for i in range(iterations):
     # --- Setup for this iteration ---
     if analysis == "BBH":
         waveform = RippleIMRPhenomD(f_ref=f_ref)
     else: # BNS
-        waveform = RippleIMRPhenomD_NRTidalv2(f_ref=f_ref)
+        waveform = RippleIMRPhenomD_NRTidalv2(f_ref=f_ref, use_lambda_tildes=False)
+
+    
+    if validation:
+        if analysis == "BBH":
+            ref_param = {
+                "M_c": 3.10497857e01,
+                "q": float(eta_to_q(0.15874815)),
+                "s1_z": 0.5,
+                "s2_z": 0.5,
+                "d_L": 5.47223231e02,
+                "t_c": 1.29378808e-02,
+                "phase_c": 3.30994042e00,
+                "iota": 1.17146435,
+                "psi": 3.41074151e-02,
+                "ra": 2.55345319e00,
+                "dec": -1.26006121,
+            }
+
+        else:  # BNS
+            ref_param = {
+                "M_c": 1.1975896,
+                "q": float(eta_to_q(0.2461001)),
+                "s1_z": -0.01890608,
+                "s2_z": 0.04888488,
+                "lambda_1": 791.04366468,
+                "lambda_2": 891.04366468,
+                "d_L": 40.06331818,
+                "t_c": 0.00193536,
+                "phase_c": 5.88649652,
+                "iota": 1.93095421,
+                "psi": 1.59687217,
+                "ra": 3.39736826,
+                "dec": -0.34000186,
+            }
+
+    else:
+        # simulated injection: use matching injected parameters
+        ref_param = ref_params[i]
+
+    ref_param = prepare_ref_params(
+        ref_param,
+        likelihood_transforms
+    )
 
     likelihood_U = HeterodynedTransientLikelihoodFD(
         detectors=ifos,
@@ -648,9 +685,9 @@ for i in range(iterations):
         f_max=fmax,
         n_bins=256,   #goal is 501
         prior=prior_U,
-        #reference_parameters=ref_param,
-        optimizer_popsize=10,
-        optimizer_n_steps=50,   #goal is 100
+        reference_parameters=ref_param,
+        #optimizer_popsize=10,
+        #optimizer_n_steps=50,   #goal is 100
         likelihood_transforms=likelihood_transforms,
         phase_marginalization=True,
     )
@@ -734,8 +771,8 @@ for i in range(iterations):
         n_bins=256,   #goal is 501
         prior=prior_C,
         reference_parameters=ref_param,
-        optimizer_popsize=10,
-        optimizer_n_steps=50,   #goal is 100
+        #optimizer_popsize=10,
+        #optimizer_n_steps=50,   #goal is 100
         likelihood_transforms=likelihood_transforms,
         phase_marginalization=True,
     )
@@ -755,7 +792,7 @@ for i in range(iterations):
     # Run the sampler for the conditioned case...
     nested_sampler_C = blackjax.nss(
             logprior_fn=logprior_conditioned, 
-            loglikelihood_fn=loglikelihood_U,
+            loglikelihood_fn=loglikelihood_C,
             num_delete=n_delete, 
             num_inner_steps=num_mcmc_steps)
     
