@@ -1,3 +1,5 @@
+# Cloned repo - my changes under files labelled 'SFM_...'
+
 # Jim 🚬
 
 ### A JAX-based gravitational-wave inference toolkit
