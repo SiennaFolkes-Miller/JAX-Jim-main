@@ -1,4 +1,7 @@
-# Cloned repo - my changes under files labelled 'SFM_...'
+# SFM adaptations
+Cloned repository - additions are under the 'examples' folder.
+Sub-folder labelled 'SFM_GW17...' contains adapted GW150914 files for BNS fitting on the GW170817 strain data.
+Sub-folder labelled 'WT_GRB...' contains initial attempts at gamma ray burst guided inference building from Will Templeton's work (previous Part III student at IoA, Cambridge).
 
 # Jim 🚬
 
